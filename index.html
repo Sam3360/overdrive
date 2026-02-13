@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>OVERDRIVE</title>
+<style>
+html,body{margin:0;overflow:hidden;background:#050510;color:white;font-family:Arial}
+#ui{position:fixed;top:10px;left:10px}
+#bar{width:200px;height:10px;background:#333;margin-top:5px}
+#fill{height:100%;background:#00ffff}
+#hearts{font-size:22px;letter-spacing:4px}
+
+#center{
+ position:fixed;inset:0;
+ display:flex;align-items:center;justify-content:center;
+ flex-direction:column;
+ background:rgba(0,0,0,0.9);
+ font-size:28px;
+ display:none;
+}
+button{
+ padding:12px 28px;
+ font-size:20px;
+ margin-top:15px;
+ cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+<h2>OVERDRIVE</h2>
+<p>Level: <span id="level">1</span></p>
+<p id="hearts">❤️❤️❤️</p>
+<p>Score: <span id="score">0</span></p>
+<p>Time Energy</p>
+<div id="bar"><div id="fill"></div></div>
+</div>
+
+<div id="center">
+<h1>GAME OVER</h1>
+<p>Final Score: <span id="final"></span></p>
+<button onclick="startGame()">REMATCH</button>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+c.width = innerWidth; c.height = innerHeight;
+
+let player,enemies,score,combo,timeEnergy;
+let frozen=false,freezeStart=0;
+let level,lives;
+let spawnRate;
+let running=false;
+let spawner;
+
+onmousemove=e=>{
+ if(player){player.x=e.clientX;player.y=e.clientY;}
+};
+
+onkeydown=e=>{
+ if(e.code=="Space" && timeEnergy>10){
+  frozen=true; freezeStart=Date.now();
+ }
+};
+
+function updateHearts(){
+ document.getElementById("hearts").textContent = "❤️".repeat(lives);
+}
+
+function resetState(){
+ player={x:c.width/2,y:c.height/2,r:10};
+ enemies=[];
+ score=0; combo=1;
+ timeEnergy=100;
+ level=1; lives=3;
+ spawnRate=800;
+ updateHearts();
+}
+
+function spawnEnemy(){
+ let type=Math.random();
+ let e={x:Math.random()*c.width,y:Math.random()*c.height,vx:0,vy:0,r:15,type};
+ let angle=Math.random()*Math.PI*2;
+ let speed=2+level*0.5;
+ e.vx=Math.cos(angle)*speed;
+ e.vy=Math.sin(angle)*speed;
+ enemies.push(e);
+}
+
+function startSpawner(){
+ clearInterval(spawner);
+ spawner=setInterval(spawnEnemy,spawnRate);
+}
+
+function loseLife(){
+ lives--;
+ updateHearts();
+ enemies=[];
+ player.x=c.width/2; player.y=c.height/2;
+ timeEnergy=100;
+ frozen=false;
+
+ if(lives<=0){
+  gameOver();
+ }
+}
+
+function gameOver(){
+ running=false;
+ clearInterval(spawner);
+ document.getElementById("final").textContent=Math.floor(score);
+ document.getElementById("center").style.display="flex";
+}
+
+function startGame(){
+ document.getElementById("center").style.display="none";
+ resetState();
+ startSpawner();
+ running=true;
+ loop();
+}
+
+function loop(){
+ if(!running) return;
+
+ ctx.clearRect(0,0,c.width,c.height);
+
+ // level progression
+ if(score > level*600){
+  level++;
+  spawnRate=Math.max(200,spawnRate-70);
+  startSpawner();
+ }
+
+ // freeze logic
+ if(frozen){
+  timeEnergy-=1;
+  if(timeEnergy<=0 || Date.now()-freezeStart>800){
+   frozen=false;
+  }
+ } else {
+  timeEnergy=Math.min(100,timeEnergy+0.3);
+ }
+
+ // update enemies
+ enemies.forEach(e=>{
+  if(!frozen){
+   if(e.type<0.6){
+    let dx=player.x-e.x, dy=player.y-e.y;
+    let d=Math.hypot(dx,dy);
+    e.vx=dx/d*(2+level*0.4);
+    e.vy=dy/d*(2+level*0.4);
+   }
+   e.x+=e.vx; e.y+=e.vy;
+  }
+
+  let dist=Math.hypot(e.x-player.x,e.y-player.y);
+
+  // near miss
+  if(dist<40 && dist>20){
+   timeEnergy=Math.min(100,timeEnergy+0.6);
+   combo+=0.002;
+  }
+
+  // collision
+  if(dist<e.r+player.r){
+   loseLife();
+  }
+ });
+
+ // draw player
+ ctx.beginPath();
+ ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+ ctx.fillStyle="#00ffff"; ctx.fill();
+
+ // draw enemies
+ enemies.forEach(e=>{
+  ctx.beginPath();
+  ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+  ctx.fillStyle = e.type<0.6?"#ff3333":"#ffaa00";
+  ctx.fill();
+ });
+
+ // UI
+ score += combo;
+ document.getElementById("score").textContent=Math.floor(score);
+ document.getElementById("fill").style.width=(timeEnergy)+"%";
+ document.getElementById("level").textContent=level;
+
+ requestAnimationFrame(loop);
+}
+
+startGame();
+</script>
+</body>
+</html>
